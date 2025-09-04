@@ -1,9 +1,4 @@
-Perfect reference 👌 — we’ll mirror that structured style but adapt it for **Enginuity AI**.
-Here’s a first draft README you can paste into your repo and adjust links (like slides/demo):
-
----
-
-# [Presentation Slides](https://docs.google.com/presentation/d/...) | Enginuity AI – Engineering Notes Assistant
+# [Presentation Slides](https://docs.google.com/presentation/d/14ZhKQd_uRxixMc3ZrCBNsQ293BQTgOte0IkRgQK1ebs/edit?slide=id.SLIDES_API246794049_0#slide=id.SLIDES_API246794049_0) | Enginuity AI – Engineering Notes Assistant
 
 Enginuity AI is an **AI-powered platform** that transforms engineering lectures into **structured, accessible study notes**. Students can upload lecture audio, slides, or PDFs, and Enginuity generates transcripts, organizes content into concepts, formulas, and code snippets, provides smart search and quizzes, and even offers a chatbot that answers questions from your lecture data.
 
