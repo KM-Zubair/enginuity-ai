@@ -74,7 +74,7 @@ Core libraries used:
 1. Clone the repo and install requirements:
 
    ```bash
-   git clone https://github.com/YourUsername/enginuity-ai.git
+   git clone https://github.com/KM-Zubair/enginuity-ai.git
    cd enginuity-ai
    pip install -r requirements.txt
    ```

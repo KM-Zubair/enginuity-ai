@@ -1,0 +1,33 @@
+# Core UI
+streamlit>=1.36,<2.0
+
+# Speech-to-text
+faster-whisper>=1.0,<1.1
+
+# Document ingestion
+pymupdf>=1.23,<1.24
+python-pptx>=0.6.23,<0.7
+
+# Vector search + embeddings
+chromadb>=0.5,<0.6
+sentence-transformers>=2.2,<3.0
+
+# Text chunking / helpers
+langchain-text-splitters>=0.2,<0.3
+
+# Formula & code handling
+sympy>=1.12,<1.13
+pygments>=2.17,<3.0
+
+# Exports
+weasyprint>=61.2,<62.0
+python-docx>=0.8.11,<0.9
+genanki>=0.13,<0.14
+
+# Text-to-speech
+edge-tts>=6.1,<7.0
+pyttsx3>=2.90,<3.0
+
+# Utilities
+pydantic>=2.8,<3.0
+pandas>=2.2,<3.0
