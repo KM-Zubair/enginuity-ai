@@ -139,3 +139,15 @@
 
 /* disabled look stays the same */
 .feature-item.disabled{ opacity: .55; }
+
+/* Notes page polish */
+.notes-page .stRadio { gap: 0.25rem; }
+.notes-page [data-testid="stSidebarNav"] a { border-radius: 12px; }
+
+.notes-page .sticky-left { position: sticky; top: 72px; }       /* wrap left column content */
+.notes-page pre code { white-space: pre-wrap; word-break: break-word; } /* wrap long code */
+.notes-page .stButton>button { border-radius: 14px; padding: 12px 18px; }
+
+@media (max-width: 900px) {
+  .notes-page .stColumn { width: 100% !important; } /* stack on mobile */
+}
