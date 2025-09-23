@@ -8,4 +8,4 @@ def load_css(file_name: str):
         with open(css_path, "r") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     else:
-        st.error(f"❌ CSS file not found: {css_path}")
+        st.error(f"CSS file not found: {css_path}")
