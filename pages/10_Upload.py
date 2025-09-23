@@ -49,6 +49,7 @@ left, right = st.columns([2, 1], gap="large")
 with left:
     kind = st.radio("File type:", ["PDF / Slides", "Audio"], horizontal=True)
     if kind == "PDF / Slides":
+        # st file uploader
         up = st.file_uploader(
             "Choose file(s)",
             type=["pdf", "pptx"],  # add "ppt" if you want
