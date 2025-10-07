@@ -7,8 +7,10 @@ if str(ROOT) not in sys.path:
 
 import time
 import json
+import os
 import streamlit as st
 from ui.theme import load_css
+import httpx  # NEW
 
 # IMPORTANT: set_page_config should be called once in the main app page only (e.g., Home.py).
 # st.set_page_config(page_title="Upload", page_icon="📤", layout="wide")
@@ -24,6 +26,8 @@ DATA_DIR = Path("data")
 UPLOAD_DIR = DATA_DIR / "uploads"
 META_FILE = DATA_DIR / "uploads.json"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+FASTAPI_URL = os.getenv("FASTAPI_URL", "http://127.0.0.1:8000")
 
 def _load_meta():
     if META_FILE.exists():
@@ -49,10 +53,9 @@ left, right = st.columns([2, 1], gap="large")
 with left:
     kind = st.radio("File type:", ["PDF / Slides", "Audio"], horizontal=True)
     if kind == "PDF / Slides":
-        # st file uploader
         up = st.file_uploader(
             "Choose file(s)",
-            type=["pdf", "pptx"],  # add "ppt" if you want
+            type=["pdf", "pptx"],
             accept_multiple_files=True,
         )
     else:
@@ -83,7 +86,7 @@ with left:
     process_btn = st.button("Process Now", disabled=not can_process)
 
     if process_btn and up:
-        # 1) Save files to disk
+        # 1) Save files locally (always)
         saved = []
         for f in up:
             safe_name = f.name.replace("/", "_").replace("\\", "_")
@@ -97,24 +100,37 @@ with left:
                 "ts": int(time.time())
             })
 
-        # 2) Show step-by-step status
+        # 2) Try backend ingestion if available; otherwise simulate steps
         with st.status("Starting processing…", expanded=True) as status:
-            st.write("• Extracting / Transcribing…")
-            time.sleep(0.6)  # placeholder
-            # TODO: call backend: POST /ingest with file paths/types
+            try:
+                st.write("• Sending to backend ingestion…")
+                # Prefer /ingest; if you implemented /upload use that instead.
+                files = []
+                for p in saved:
+                    files.append(("files", (p.name, p.open("rb"), "application/octet-stream")))
+                payload = {"kind": "audio" if kind == "Audio" else "doc"}
 
-            st.write("• Chunking & labeling content…")
-            time.sleep(0.6)  # placeholder
-            # TODO: call backend: POST /chunk
+                # Adjust endpoint name when you implement it in FastAPI
+                resp = httpx.post(f"{FASTAPI_URL}/upload", data=payload, files=files, timeout=120.0)
+                resp.raise_for_status()
 
-            st.write("• Building searchable index…")
-            time.sleep(0.6)  # placeholder
-            # TODO: call backend: POST /index
+                st.write("• Backend chunking & labeling…")
+                st.write("• Building searchable index…")
+                status.update(label="Processing complete ✅", state="complete")
+                st.session_state["has_corpus"] = True
+                st.success("Your corpus is ready (backend).")
+            except Exception as e:
+                # graceful fallback (your original simulated steps)
+                st.write("• Extracting / Transcribing…")
+                time.sleep(0.6)
+                st.write("• Chunking & labeling content…")
+                time.sleep(0.6)
+                st.write("• Building searchable index…")
+                time.sleep(0.6)
+                status.update(label="Processing complete ✅ (local fallback)", state="complete")
+                st.info(f"Backend not used (yet): {e}")
+                st.session_state["has_corpus"] = True
 
-            status.update(label="Processing complete ✅", state="complete")
-
-        st.session_state["has_corpus"] = True
-        st.success("Your corpus is ready.")
         st.markdown("➡️ Go to **Notes** or **Search/Q&A** to see results.")
 
 with right:
@@ -129,7 +145,6 @@ with right:
     st.subheader("Recent uploads")
     meta = _load_meta()
     if meta:
-        # show most recent 5
         for m in meta[:5]:
             size_kb = m["bytes"] / 1024 if m.get("bytes") else 0
             st.write(f"{m['name']}  ·  {m['kind']}  ·  {size_kb:.1f} KB")

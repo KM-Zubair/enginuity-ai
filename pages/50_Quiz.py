@@ -3,7 +3,9 @@ import sys
 from pathlib import Path
 import json
 import random
+import os
 from datetime import datetime
+from typing import List, Dict, Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -11,6 +13,7 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st
 from ui.theme import load_css
+import httpx  # NEW
 
 # IMPORTANT: set_page_config should be called only once in the main entry page.
 # st.set_page_config(page_title="Quiz", page_icon="🧩", layout="wide")
@@ -37,7 +40,10 @@ if NOTES_JSON.exists():
         lecture_title = doc.get("lecture_title", lecture_title)
         ts = doc.get("generated_at")
         if ts:
-            st.caption(f"Lecture: **{lecture_title}** · Generated: {datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M')}")
+            st.caption(
+                f"Lecture: **{lecture_title}** · Generated: "
+                f"{datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M')}"
+            )
     except Exception:
         pass
 
@@ -50,13 +56,13 @@ with st.form("quiz_controls"):
     topic_seed = st.text_input("Optional topic focus", placeholder="e.g., Laplace, stability, convolution")
     generated = st.form_submit_button("Generate Quiz")
 
-# Helper to reset runtime answer state
-def reset_attempt_state():
+# ---------- Helpers ----------
+def reset_attempt_state() -> None:
     st.session_state["quiz_answers"] = {}      # question_idx -> user answer (string)
     st.session_state["quiz_submitted"] = False
     st.session_state["quiz_score"] = None
 
-def shuffle_choices(choices, answer):
+def shuffle_choices(choices: List[str], answer: str):
     """Return (shuffled_choices, correct_index) while preserving the correct answer string."""
     if not choices:
         return [], None
@@ -65,47 +71,49 @@ def shuffle_choices(choices, answer):
     correct_index = items.index(answer) if answer in items else None
     return items, correct_index
 
-# ---------- Generate (stub or backend) ----------
+FASTAPI_URL = os.getenv("FASTAPI_URL", "http://127.0.0.1:8000")
+
+# ---------- Generate via backend ----------
 if generated:
-    # TODO: Replace this block with real backend call
-    # import httpx
-    # payload = {"n": n_questions, "type": qtype.lower(), "difficulty": difficulty.lower(), "topic": topic_seed}
-    # resp = httpx.post(f"{FASTAPI_URL}/quiz", json=payload, timeout=60)
-    # items = resp.json()["items"]
+    payload: Dict[str, Any] = {
+    "n": int(n_questions),
+    "type": str((qtype or "MCQ")).lower(),
+    "difficulty": str((difficulty or "Auto")).lower(),
+    "topic": topic_seed or None,
+}
 
-    # Demo questions (MCQ) — include optional 'explanation'
-    base = [
-        {"q": "What is the Laplace transform of 1?", "choices": ["1/s", "s", "0", "∞"], "answer": "1/s",
-         "explanation": "𝓛{1} = ∫₀^∞ e^{-st} dt = 1/s for Re(s) > 0."},
-        {"q": "Poles in the right half-plane imply ____", "choices": ["stability", "instability", "oscillation", "causality"], "answer": "instability",
-         "explanation": "Right-half-plane poles (Re(s) > 0) → divergent modes → unstable."},
-        {"q": "For causal LTI systems, the ROC of Laplace transform is:", "choices": ["Left of rightmost pole", "Right of rightmost pole", "A vertical line Re(s)=0", "Entire s-plane"], "answer": "Right of rightmost pole"},
-        {"q": "Convolution in time corresponds to ____ in the Laplace domain.", "choices": ["Addition", "Subtraction", "Multiplication", "Division"], "answer": "Multiplication"},
-        {"q": "The step response is the integral of the ____ response.", "choices": ["Impulse", "Frequency", "Ramp", "Sinusoidal"], "answer": "Impulse"},
-        {"q": "A BIBO stable system has impulse response h(t) that is:", "choices": ["Square-integrable", "Absolutely integrable", "Differentiable", "Periodic"], "answer": "Absolutely integrable"},
-    ]
-    items = base[:n_questions]
 
-    # If FIB requested, convert some to blanks
-    if qtype in ("Fill-in-the-blank", "Mix"):
-        for j, it in enumerate(items):
-            if qtype == "Fill-in-the-blank" or (qtype == "Mix" and j % 3 == 2):
-                # Turn answer into a blank; keep 'answer' key for grading
-                it["choices"] = []
-                it["q"] = it["q"].replace(it["answer"], "____") if it["answer"] in it["q"] else f"{it['q']}  (Answer: ____)"
+    # normalize qtype to what backend expects
+    if payload["type"] in ("fill-in-the-blank", "fill in the blank", "fill_in_the_blank"):
+        payload["type"] = "fib"
+
+    try:
+        with st.spinner("Generating quiz…"):
+            r = httpx.post(f"{FASTAPI_URL}/quiz", json=payload, timeout=60.0)
+            r.raise_for_status()
+            items_from_api: List[Dict[str, Any]] = r.json() or []
+    except Exception as e:
+        st.error(f"Quiz generation failed: {e}")
+        items_from_api = []
 
     # Prepare a view-model with shuffled choices (don’t mutate originals)
-    vm = []
-    for it in items:
-        if it.get("choices"):
-            shuf, _ = shuffle_choices(it["choices"], it["answer"])
+    vm: List[Dict[str, Any]] = []
+    for it in items_from_api:
+        choices = it.get("choices", [])
+        if choices:
+            shuf, _ = shuffle_choices(choices, it.get("answer", ""))
             vm.append({**it, "choices_shuf": shuf})
         else:
             vm.append({**it, "choices_shuf": []})
+
     st.session_state["quiz_items"] = vm
     st.session_state["quiz_meta"] = {
-        "lecture": lecture_title, "n": len(vm), "type": qtype, "difficulty": difficulty, "topic": topic_seed,
-        "generated_at": datetime.now().isoformat()
+        "lecture": lecture_title,
+        "n": len(vm),
+        "type": qtype,
+        "difficulty": difficulty,
+        "topic": topic_seed,
+        "generated_at": datetime.now().isoformat(),
     }
     reset_attempt_state()
 
@@ -123,7 +131,7 @@ else:
     # Render each item
     for i, item in enumerate(items, 1):
         st.markdown("<div class='quiz-card'>", unsafe_allow_html=True)
-        st.write(f"**{i}.** {item['q']}")
+        st.write(f"**{i}.** {item.get('q', '')}")
 
         # MCQ
         if item.get("choices_shuf"):
@@ -137,7 +145,7 @@ else:
         else:
             # Fill-in-the-blank
             user = st.text_input("Your answer", key=f"ans-{i}")
-            st.session_state["quiz_answers"][i] = user.strip()
+            st.session_state["quiz_answers"][i] = (user or "").strip()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -163,15 +171,22 @@ else:
         correct = 0
         review = []
         for i, it in enumerate(items, 1):
-            gold = it["answer"]
-            pred = answers.get(i, "")
+            gold = str(it.get("answer", ""))
+            pred = str(answers.get(i, ""))
             is_mcq = bool(it.get("choices"))
             if is_mcq:
                 ok = (pred == gold)
             else:
-                ok = pred.strip().lower() == str(gold).strip().lower()
+                ok = pred.strip().lower() == gold.strip().lower()
             correct += int(ok)
-            review.append({"i": i, "q": it["q"], "your": pred, "answer": gold, "ok": ok, "explanation": it.get("explanation", "")})
+            review.append({
+                "i": i,
+                "q": it.get("q", ""),
+                "your": pred,
+                "answer": gold,
+                "ok": ok,
+                "explanation": it.get("explanation", ""),
+            })
 
         st.session_state["quiz_submitted"] = True
         st.session_state["quiz_score"] = {"correct": correct, "total": len(items), "review": review}
@@ -192,11 +207,9 @@ else:
                 if r.get("explanation"):
                     st.info(r["explanation"])
 
-# ---------- Notes for backend wiring ----------
-# 1) Replace demo generation with POST /quiz:
-#    payload = { n, type: mcq|fib|mix, difficulty: easy|medium|hard|auto, topic (optional) }
-#    response = { items: [ { q, choices:[...], answer, explanation? } ] }
-# 2) Consider caching the generated quiz per lecture so students can retake with shuffles.
-# 3) Optionally add /grade endpoint; current grading happens client-side for responsiveness.
+# ---------- Notes ----------
+# Backend contract: POST /quiz
+# Request: { n, type: "mcq"|"fib"|"mix", difficulty, topic? }
+# Response: [ { q, choices:[], answer, explanation? }, ... ]
 
 st.markdown('</div>', unsafe_allow_html=True)

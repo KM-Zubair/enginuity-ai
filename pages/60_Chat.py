@@ -1,6 +1,7 @@
 # chat.py
 import sys
 import json
+import os
 from pathlib import Path
 from datetime import datetime
 
@@ -10,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st
 from ui.theme import load_css
+import httpx  # NEW
 
 # IMPORTANT: set_page_config should be called only once in the main entry page.
 # st.set_page_config(page_title="AI Assistant", page_icon="🤖", layout="wide")
@@ -89,7 +91,7 @@ def render_message(msg):
                     if sec:
                         line += f" · Section: {sec}"
                     if score is not None:
-                        line += f" · Score: {score:.2f}"
+                        line += f" · Score: {float(score):.2f}"
                     st.markdown(f"- **{line}**")
                     if snip:
                         st.caption(snip)
@@ -97,6 +99,8 @@ def render_message(msg):
 # Render chat so far
 for m in st.session_state["messages"]:
     render_message(m)
+
+FASTAPI_URL = os.getenv("FASTAPI_URL", "http://127.0.0.1:8000")
 
 # ---------- Input ----------
 prompt = st.chat_input("Type your question…")
@@ -106,42 +110,31 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # ---- Call backend (replace demo with real call) ----
-    # Example contract:
-    # payload = {
-    #   "messages": st.session_state["messages"],
-    #   "top_k": top_k,
-    #   "temperature": temperature,
-    #   "ctx_mode": "notes" if ctx_mode == "Notes only" else "notes+web"
-    # }
-    # import httpx
-    # resp = httpx.post(f"{FASTAPI_URL}/chat", json=payload, timeout=60.0)
-    # data = resp.json()  # { "text": "...", "citations": [ {title, section_id?, score?, snippet?}, ... ] }
-
-    # --- Demo answer (placeholder) ---
-    demo_text = (
-        "Stability requires all poles to lie in the left half-plane. "
-        "For a step input, you can examine the dominant pole of the transfer function to estimate settling time."
-    )
-    demo_citations = [
-        {
-            "title": "Poles & stability",
-            "section_id": "sec-1",
-            "score": 0.78,
-            "snippet": "A linear system is stable if all poles lie strictly in the left half-plane."
-        },
-        {
-            "title": "Laplace Transform — definition",
-            "section_id": "sec-2",
-            "score": 0.73,
-            "snippet": "𝓛{f(t)} = ∫₀^∞ f(t)e^{-st} dt; use poles of H(s) to analyze stability."
-        }
-    ]
-    answer_msg = {
-        "role": "assistant",
-        "content": {"text": demo_text},
-        "citations": demo_citations
+    # ---- Call backend ----
+    payload = {
+        "messages": st.session_state["messages"],
+        "top_k": int(top_k),
+        "temperature": float(temperature),
+        "ctx_mode": "notes" if ctx_mode == "Notes only" else "notes+web",
     }
+
+    try:
+        with st.spinner("Thinking…"):
+            resp = httpx.post(f"{FASTAPI_URL}/chat", json=payload, timeout=60.0)
+            resp.raise_for_status()
+            data = resp.json()  # { "text": "...", "citations": [ {...}, ... ] }
+            answer_msg = {
+                "role": "assistant",
+                "content": {"text": data.get("text", "")},
+                "citations": data.get("citations", []),
+            }
+    except Exception as e:
+        # graceful fallback on error
+        answer_msg = {
+            "role": "assistant",
+            "content": {"text": f"Chat failed: {e}"},
+            "citations": [],
+        }
 
     # Append assistant turn
     st.session_state["messages"].append(answer_msg)

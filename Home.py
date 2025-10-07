@@ -3,9 +3,10 @@ from pathlib import Path
 from textwrap import dedent
 import streamlit as st
 from ui.theme import load_css
-
 import streamlit as st
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
 
 st.set_page_config(page_title="Enginuity AI", page_icon="⚙️", layout="wide")
 # Load CSS directly
