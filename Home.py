@@ -15,7 +15,7 @@ if css_file.exists():
     with open(css_file) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 else:
-    st.error("❌ base.css not found")
+    st.error("base.css not found")
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
