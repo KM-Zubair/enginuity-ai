@@ -23,26 +23,55 @@ The system follows these main steps:
 
 ```
 enginuity-ai/
-├── app/                    # Streamlit app pages
-│   ├── 00_Home.py          # Landing page & settings
-│   ├── 10_Upload.py        # File upload & ingestion
-│   ├── 30_Notes.py         # Notes viewer with TTS
-│   ├── 40_Search.py        # Keyword + semantic search
-│   ├── 50_Quiz.py          # Quiz generation & export
-│   └── 60_Chat.py          # Chatbot (RAG)
+├── Home.py                 # Main Streamlit entry point (loads .env, navigation)
+├── pages/                  # Streamlit app pages
+│   ├── 10_Upload.py        # File upload & ingestion trigger (calls /upload)
+│   ├── 30_Notes.py         # Dynamic notes viewer (loads from backend)
+│   ├── 40_Search.py        # Semantic search powered by Chroma
+│   ├── 50_Quiz.py          # Quiz generation (connected to /quiz)
+│   └── 60_Chat.py          # Chatbot (RAG-based, connected to /chat)
 │
-├── core/                   # Backend logic (pure Python modules)
-│   ├── ingest/             # Audio, PDF, PPT processing
-│   ├── structure/          # Chunking & labeling
-│   ├── vector/             # Embedding & index helpers
-│   ├── export/             # Exporters: md, pdf, docx, anki
-│   ├── qa/                 # Quiz generator
-│   └── chat/               # RAG chatbot logic
+├── ui/                     # UI styling and theme configuration
+│   └── theme/
+│       └── base.css        # Core CSS for Streamlit layout
 │
-├── data/                   # Uploaded files, processed outputs, indexes (gitignored)
-├── requirements.txt        # Python dependencies
-├── README.md               # Project overview
-└── .gitignore              # Ignore venv, caches, data/
+├── data/                   # Local data folder for uploads & generated notes (gitignored)
+│   ├── uploads/            # Uploaded PDFs / PPTs
+│   ├── notes.json          # Generated structured notes
+│   ├── uploads.json        # Metadata for upload history
+│   └── chroma/             # Local Chroma vector index store
+│
+├── enginuity-backend/      # FastAPI backend service
+│   ├── app/
+│   │   ├── main.py         # FastAPI entrypoint (app init + routes)
+│   │   ├── core/
+│   │   │   └── config.py   # Settings (DATA_DIR, VECTORDB_DIR, model paths)
+│   │   ├── routers/        # API routes (modular endpoints)
+│   │   │   ├── health.py   # Health check
+│   │   │   ├── upload.py   # Handles PDF/PPT ingestion
+│   │   │   ├── notes.py    # Serves notes.json
+│   │   │   ├── search.py   # Semantic vector search
+│   │   │   ├── quiz.py     # Quiz generator (AI-driven)
+│   │   │   ├── chat.py     # Chatbot (RAG: retrieve + generate)
+│   │   │   └── export.py   # Notes export endpoints
+│   │   ├── services/       # Core backend utilities
+│   │   │   ├── extract.py  # PDF/PPT text extraction (PyMuPDF, python-pptx)
+│   │   │   ├── chunk.py    # Content chunking for embedding
+│   │   │   ├── vector.py   # Chroma vector indexing & retrieval
+│   │   │   └── io.py       # JSON read/write helpers
+│   │   ├── models/
+│   │   │   └── schemas.py  # Pydantic models for request/response
+│   │   └── __init__.py
+│   │
+│   ├── .env.example        # Backend environment variables (paths, model configs)
+│   ├── requirements.txt    # Backend Python dependencies
+│   └── tests/              # Backend unit tests (to be expanded)
+│
+├── requirements.txt        # Frontend (Streamlit) dependencies
+├── .env                    # FASTAPI_URL and other frontend variables
+├── .gitignore              # Ignores venv, __pycache__, data, vector stores
+└── README.md               # Project overview (this file)
+
 ```
 
 ---
