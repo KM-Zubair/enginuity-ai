@@ -6,6 +6,7 @@ import random
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from ui.bootstrap import ensure_corpus
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -19,6 +20,29 @@ import httpx  # NEW
 # st.set_page_config(page_title="Quiz", page_icon="🧩", layout="wide")
 
 load_css("base.css")
+
+ready = ensure_corpus()
+if not ready:
+    st.warning("No saved corpus found. Upload and process a lecture to generate quizzes.")
+    try:
+        st.page_link("pages/Upload.py", label="Go to Upload", icon="📤")
+    except Exception:
+        pass
+    # You may continue; the page can still use local notes.json as fallback
+    # st.stop()
+
+# prefer backend-provided meta when available
+if st.session_state.get("lecture_title"):
+    lecture_title = st.session_state["lecture_title"]
+if st.session_state.get("generated_at"):
+    try:
+        ts = int(st.session_state["generated_at"])
+        st.caption(
+            f"Lecture: **{lecture_title}** · Generated: "
+            f"{datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M')}"
+        )
+    except Exception:
+        pass
 
 if not st.session_state.get("has_corpus"):
     st.warning("Upload and process a lecture to generate quizzes.")

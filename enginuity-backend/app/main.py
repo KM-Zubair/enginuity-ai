@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
-from app.routers import health, notes, search, quiz, chat, export, upload
+from app.routers import health, notes, search, quiz, chat, export, upload, corpus
 
 # Load settings
 settings = get_settings()
@@ -39,6 +39,7 @@ app.include_router(quiz.router, prefix="/quiz", tags=["quiz"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(export.router, prefix="/export", tags=["export"])
 app.include_router(upload.router, prefix="/upload", tags=["upload"])
+app.include_router(corpus.router, prefix="/corpus", tags=["corpus"])
 
 # --- Root Route ---
 @app.get("/")

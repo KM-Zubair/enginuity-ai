@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Dict
 import httpx
 import streamlit as st
+from ui.bootstrap import ensure_corpus
 from ui.theme import load_css
 
 # --- Path setup ---
@@ -18,6 +19,16 @@ if str(ROOT) not in sys.path:
 # --- Page setup ---
 # st.set_page_config(page_title="Search", page_icon="🔍", layout="wide")
 load_css("base.css")
+
+ready = ensure_corpus()
+if not ready:
+    st.warning("No saved corpus found. Upload and process a lecture to search.")
+    try:
+        st.page_link("pages/Upload.py", label="Go to Upload", icon="📤")
+    except Exception:
+        pass
+    # You may still allow keyword-only search against local file if you want
+    # st.stop()
 
 if not st.session_state.get("has_corpus"):
     st.warning("Upload and process a lecture to search.")

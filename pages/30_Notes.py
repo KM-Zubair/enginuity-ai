@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from ui.bootstrap import ensure_corpus
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -18,6 +19,16 @@ import httpx  # NEW
 # st.set_page_config(page_title="Notes", page_icon="📓", layout="wide")
 
 load_css("base.css")
+ready = ensure_corpus()
+
+if not ready:
+    st.warning("No saved notes found yet. Upload and process a lecture to view notes.")
+    try:
+        st.page_link("pages/Upload.py", label="Go to Upload", icon="📤")
+    except Exception:
+        pass
+    # You can still show local fallback/sample below if you want, instead of st.stop()
+    # st.stop()
 
 if not st.session_state.get("has_corpus"):
     st.warning("Upload and process a lecture to view notes.")
