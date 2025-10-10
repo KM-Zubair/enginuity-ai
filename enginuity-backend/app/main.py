@@ -1,13 +1,28 @@
+# app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.routers import health, notes, search, quiz, chat, export, upload
 
+# Load settings
 settings = get_settings()
-app = FastAPI(title="Enginuity Backend", version="0.1.0")
 
-# CORS
-origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+# Initialize FastAPI app
+app = FastAPI(
+    title="Enginuity Backend",
+    version="0.1.0",
+    description="Backend API for Enginuity AI"
+)
+
+# --- CORS Configuration ---
+raw_origins = settings.CORS_ALLOW_ORIGINS
+if isinstance(raw_origins, str):
+    origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+elif isinstance(raw_origins, list):
+    origins = [str(o).strip() for o in raw_origins if str(o).strip()]
+else:
+    origins = ["http://localhost:8501"]  # default fallback
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins or ["*"],
@@ -16,7 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
+# --- Routers ---
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(notes.router, prefix="/notes", tags=["notes"])
 app.include_router(search.router, prefix="/search", tags=["search"])
@@ -25,3 +40,11 @@ app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(export.router, prefix="/export", tags=["export"])
 app.include_router(upload.router, prefix="/upload", tags=["upload"])
 
+# --- Root Route ---
+@app.get("/")
+def root():
+    return {
+        "message": "Enginuity Backend is running ✅",
+        "version": "0.1.0",
+        "origins_allowed": origins,
+    }

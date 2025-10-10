@@ -12,3 +12,4 @@ sentence-transformers==3.2.1
 chromadb==0.5.11
 psycopg2-binary==2.9.9
 SQLAlchemy==2.0.35
+openai>=1.0.0

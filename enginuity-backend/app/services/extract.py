@@ -8,7 +8,7 @@ def from_pdf(path: Path) -> str:
     doc = fitz.open(str(path))
     texts = []
     for page in doc:
-        texts.append(page.get_text())
+        texts.append(page.get_text()) # type: ignore
     return "\n".join(texts).strip()
 
 def from_pptx(path: Path) -> str:

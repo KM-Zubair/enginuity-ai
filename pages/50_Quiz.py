@@ -5,7 +5,7 @@ import json
 import random
 import os
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -47,15 +47,6 @@ if NOTES_JSON.exists():
     except Exception:
         pass
 
-# ---------- Controls ----------
-with st.form("quiz_controls"):
-    c1, c2, c3 = st.columns([1, 1, 2])
-    n_questions = c1.slider("Number of questions", 3, 25, 6)
-    qtype = c2.selectbox("Type", ["MCQ", "Fill-in-the-blank", "Mix"])
-    difficulty = c3.selectbox("Difficulty", ["Auto", "Easy", "Medium", "Hard"])
-    topic_seed = st.text_input("Optional topic focus", placeholder="e.g., Laplace, stability, convolution")
-    generated = st.form_submit_button("Generate Quiz")
-
 # ---------- Helpers ----------
 def reset_attempt_state() -> None:
     st.session_state["quiz_answers"] = {}      # question_idx -> user answer (string)
@@ -71,17 +62,83 @@ def shuffle_choices(choices: List[str], answer: str):
     correct_index = items.index(answer) if answer in items else None
     return items, correct_index
 
-FASTAPI_URL = os.getenv("FASTAPI_URL", "http://127.0.0.1:8000")
+def load_local_sections() -> List[Dict[str, Any]]:
+    """Read sections from notes.json (used to scope quiz generation)."""
+    if NOTES_JSON.exists():
+        try:
+            _doc = json.loads(NOTES_JSON.read_text(encoding="utf-8"))
+            secs = _doc.get("sections", [])
+            # keep only blocks that have content
+            return [s for s in secs if s.get("content")]
+        except Exception:
+            return []
+    return []
+
+# ---------- Section scope (optional) ----------
+all_sections = load_local_sections()
+section_titles = [s.get("title", "Untitled") for s in all_sections]
+
+with st.expander("Section scope (optional)"):
+    picked_titles = st.multiselect(
+        "Only generate questions from these sections",
+        options=section_titles,
+        default=section_titles[:4] if section_titles else []
+    )
+    picked = [s for s in all_sections if s.get("title", "Untitled") in picked_titles]
+
+# ---------- Controls ----------
+with st.form("quiz_controls"):
+    c1, c2, c3 = st.columns([1, 1, 2])
+    n_questions = c1.slider("Number of questions", 3, 25, 6)
+    qtype = c2.selectbox("Type", ["MCQ", "Fill-in-the-blank", "Mix"])
+    difficulty = c3.selectbox("Difficulty", ["Auto", "Easy", "Medium", "Hard"])
+    topic_seed = st.text_input("Optional topic focus", placeholder="e.g., Laplace, stability, convolution")
+    generated = st.form_submit_button("Generate Quiz")
+
+FASTAPI_URL = (os.getenv("FASTAPI_URL", "http://127.0.0.1:8000") or "").rstrip("/")
 
 # ---------- Generate via backend ----------
 if generated:
-    payload: Dict[str, Any] = {
-    "n": int(n_questions),
-    "type": str((qtype or "MCQ")).lower(),
-    "difficulty": str((difficulty or "Auto")).lower(),
-    "topic": topic_seed or None,
-}
+    # Build scoped context from selected sections (or all sections if none picked)
+    section_ids: List[str] = [s.get("id", "") for s in picked] if picked else []
+    raw_context_parts: List[str] = []
+    for s in (picked or all_sections):
+        title = s.get("title", "")
+        content = s.get("content", "")
+        s_type = s.get("type", "text")
+        if not content:
+            continue
+        if s_type == "code":
+            raw_context_parts.append(f"{title}\nCode:\n{content}\n")
+        elif s_type == "latex":
+            raw_context_parts.append(f"{title}\nMath:\n{content}\n")
+        else:
+            raw_context_parts.append(f"{title}\n{content}\n")
 
+    context_text = "\n\n".join(raw_context_parts).strip()
+
+    # cap payload size to keep requests snappy
+    if len(context_text) > 12000:
+        context_text = context_text[:12000]
+
+    # Guard: don't submit if there is no study text
+    if not context_text.strip() and not (topic_seed and topic_seed.strip()):
+        st.error("No study material found. Select relevant sections or provide a topic focus.")
+        st.stop()
+
+    # Small debug badge so you know what's being sent
+    st.caption(f"Context chars: {len(context_text)}")
+
+    payload: Dict[str, Any] = {
+        "n": int(n_questions),
+        "type": str((qtype or "MCQ")).lower(),
+        "difficulty": str((difficulty or "Auto")).lower(),
+        "topic": topic_seed or None,
+        "section_ids": section_ids or None,
+        "context": context_text or None,    # backend prefers this
+        "corpus_id": st.session_state.get("corpus_id"),
+        "lecture_title": lecture_title,
+    }
 
     # normalize qtype to what backend expects
     if payload["type"] in ("fill-in-the-blank", "fill in the blank", "fill_in_the_blank"):
@@ -89,6 +146,7 @@ if generated:
 
     try:
         with st.spinner("Generating quiz…"):
+            # Accept both /quiz and /quiz/ (router supports both)
             r = httpx.post(f"{FASTAPI_URL}/quiz", json=payload, timeout=60.0)
             r.raise_for_status()
             items_from_api: List[Dict[str, Any]] = r.json() or []
@@ -114,6 +172,7 @@ if generated:
         "difficulty": difficulty,
         "topic": topic_seed,
         "generated_at": datetime.now().isoformat(),
+        "section_ids": section_ids,
     }
     reset_attempt_state()
 
@@ -127,6 +186,8 @@ else:
     st.subheader(f"{meta.get('lecture','Notes')} · {meta.get('type','MCQ')} · {meta.get('difficulty','Auto')}")
     focus = f" · Focus: {meta['topic']}" if meta.get("topic") else ""
     st.caption(f"{meta.get('n', len(items))} questions{focus}")
+    if meta.get("section_ids"):
+        st.caption(f"Scoped to {len(meta['section_ids'])} section(s)")
 
     # Render each item
     for i, item in enumerate(items, 1):
@@ -139,9 +200,10 @@ else:
                 "Choose:",
                 options=item["choices_shuf"],
                 key=f"ans-{i}",
-                horizontal=True
+                horizontal=True,
+                index=None  # start with nothing selected
             )
-            st.session_state["quiz_answers"][i] = user
+            st.session_state["quiz_answers"][i] = user or ""
         else:
             # Fill-in-the-blank
             user = st.text_input("Your answer", key=f"ans-{i}")
@@ -172,7 +234,7 @@ else:
         review = []
         for i, it in enumerate(items, 1):
             gold = str(it.get("answer", ""))
-            pred = str(answers.get(i, ""))
+            pred = str(answers.get(i, "") or "")
             is_mcq = bool(it.get("choices"))
             if is_mcq:
                 ok = (pred == gold)
@@ -182,7 +244,7 @@ else:
             review.append({
                 "i": i,
                 "q": it.get("q", ""),
-                "your": pred,
+                "your": pred or "—",
                 "answer": gold,
                 "ok": ok,
                 "explanation": it.get("explanation", ""),
@@ -209,7 +271,10 @@ else:
 
 # ---------- Notes ----------
 # Backend contract: POST /quiz
-# Request: { n, type: "mcq"|"fib"|"mix", difficulty, topic? }
-# Response: [ { q, choices:[], answer, explanation? }, ... ]
+# Request: {
+#   n, type: "mcq"|"fib"|"mix", difficulty, topic?,
+#   section_ids?: string[], context?: string, corpus_id?: string, lecture_title?: string
+# }
+# Response: [ { q, choices?:[], answer, explanation? }, ... ]
 
 st.markdown('</div>', unsafe_allow_html=True)

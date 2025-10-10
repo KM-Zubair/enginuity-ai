@@ -3,7 +3,8 @@ from typing import List, Dict, Tuple
 from pathlib import Path
 from app.core.config import get_settings
 import chromadb
-from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction  # type: ignore
+
 
 # use a local model (no API key required)
 _embedder = SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
@@ -14,7 +15,7 @@ def _client():
     persist.mkdir(parents=True, exist_ok=True)
     return chromadb.PersistentClient(path=str(persist))
 
-def collection(name: str = "enginuity") -> chromadb.api.models.Collection.Collection:
+def collection(name: str = "enginuity") -> chromadb.api.models.Collection.Collection: # type: ignore[attr-defined]
     cli = _client()
     try:
         return cli.get_collection(name=name, embedding_function=_embedder)
